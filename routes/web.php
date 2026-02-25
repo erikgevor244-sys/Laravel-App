@@ -18,58 +18,63 @@ Route::post('/register', function (Request $request) {
         'role' => $request->role,
     ]);
     Auth::login($user);
-    return ($user->role === 'admin') ? redirect('/admin/dashboard') : redirect('/user/dashboard');
+    return ($user->role === 'admin') ? redirect('/dashboard') : redirect('/dashboard');
 });
 
 Route::get('/login', function () { return view('auth.login'); })->name('login');
 Route::post('/login', function (Request $request) {
     if (Auth::attempt($request->only('email', 'password'))) {
         $request->session()->regenerate();
-        return (Auth::user()->role === 'admin') ? redirect('/admin/dashboard') : redirect('/user/dashboard');
+        return (Auth::user()->role === 'admin') ? redirect('/dashboard') : redirect('/dashboard');
     }
     return back();
 });
 
-Route::post('/logout', function (Request $request) {
-    Auth::logout();
-    return redirect('/login');
-})->name('logout');
-
-Route::middleware('auth')->group(function () {
-    Route::get('/user/dashboard', function () {
-        $products = Product::where('user_id', Auth::id())->get();
-        return view('user.dashboard', compact('products'));
-    })->name('user.dashboard');
-
-    Route::post('/products/store', function (Request $request) {
-        Product::create([
-            'title' => $request->title,
-            'description' => $request->description,
-            'price' => $request->price,
-            'user_id' => Auth::id()
-        ]);
-        return back();
-    })->name('products.store');
-});
-
-Route::middleware(['auth', 'role:admin'])->group(function () {
-    Route::get('/admin/dashboard', function () {
+Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', function () {
+        $user_role = auth()->user()->role;
         $products = Product::with('user')->get();
-        return view('admin.dashboard', compact('products'));
-    })->name('admin.dashboard');
+        return view('dashboard', compact('products','user_role'));
+    })->name('dashboard');
 
-    Route::get('/admin/products/edit/{id}', function ($id) {
+    Route::middleware(['auth','role:admin'])->group(function () {
+   Route::get('/product/create', function () {
+            $user_role = auth()->user()->role;
+
+        return view('products.add_product', compact('user_role'));
+    })->name('add_product');
+
+        Route::post('/product/store', function (Request $request) {
+                Product::create([
+                    'title' => $request->title,
+                    'description' => $request->description,
+                    'price' => $request->price,
+                    'user_id' => Auth::id()
+                ]);
+                return back();
+            })->name('product.store');
+    });
+
+
+    Route::get('/product/edit/{id}', function ($id) {
+        $user_role = auth()->user()->role;
         $product = Product::findOrFail($id);
-        return view('admin.edit_product', compact('product'));
-    })->name('admin.products.edit');
 
-    Route::post('/admin/products/update/{id}', function (Request $request, $id) {
+        return view('products.edit_product', compact('product','user_role'));
+    })->name('product.edit');
+
+    Route::post('product/update/{id}', function (Request $request, $id) {
         Product::findOrFail($id)->update($request->only('title', 'description', 'price'));
-        return redirect('/admin/dashboard');
-    })->name('admin.products.update');
+        return redirect('/dashboard');
+    })->name('product.update');
 
-    Route::post('/admin/products/delete/{id}', function ($id) {
+    Route::post('/product/delete/{id}', function ($id) {
         Product::findOrFail($id)->delete();
         return back();
-    })->name('admin.products.delete');
+    })->name('product.delete');
+
+    Route::post('/logout', function (Request $request) {
+    Auth::logout();
+    return redirect('/login');
+    })->name('logout');
 });
